@@ -7,10 +7,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.moviewatchlist.api.OmdbClient
@@ -20,9 +24,15 @@ import com.example.moviewatchlist.model.MovieResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.ui.graphics.Color
 
 @Composable
-fun MainScreen(onSignOut: () -> Unit) {
+fun MainScreen(
+    onSignOut: () -> Unit,
+    darkTheme: Boolean,
+    onToggleTheme: (Boolean) -> Unit
+) {
     var selectedTab by remember { mutableStateOf(0) }
     val context = LocalContext.current
     val dao = AppDatabase.getDatabase(context).movieDao()
@@ -94,42 +104,64 @@ fun MainScreen(onSignOut: () -> Unit) {
                         value = title,
                         onValueChange = { title = it },
                         label = { Text("Enter movie title") },
-                        modifier = Modifier.fillMaxWidth()
+                        placeholder = { Text("e.g. Inception") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(onClick = {
-                        coroutineScope.launch {
-                            try {
-                                val result = withContext(Dispatchers.IO) {
-                                    OmdbClient.api.getMovieByTitle(title.trim(), "95d9495f")
-                                }
-                                if (result.Response == "False") {
-                                    error = result.Error ?: "Unknown error"
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                try {
+                                    val result = withContext(Dispatchers.IO) {
+                                        OmdbClient.api.getMovieByTitle(title.trim(), "95d9495f")
+                                    }
+                                    if (result.Response == "False") {
+                                        error = result.Error ?: "Unknown error"
+                                        movie = null
+                                    } else {
+                                        movie = result
+                                        error = null
+                                    }
+                                } catch (e: Exception) {
+                                    error = "Network error: ${e.localizedMessage}"
                                     movie = null
-                                } else {
-                                    movie = result
-                                    error = null
                                 }
-                            } catch (e: Exception) {
-                                error = "Network error: ${e.localizedMessage}"
-                                movie = null
                             }
-                        }
-                    }) {
-                        Text("Search")
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Search", fontWeight = FontWeight.Bold)
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
+
+                    AnimatedVisibility(visible = error != null) {
+                        error?.let {
+                            Text(
+                                it,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                    }
 
                     if (title.isBlank()) {
                         if (isLoading) {
                             CircularProgressIndicator()
                         } else {
-                            Text("✨ Featured Movies", style = MaterialTheme.typography.titleMedium)
+                            Text("Featured Movies", style = MaterialTheme.typography.titleMedium)
                             Spacer(modifier = Modifier.height(8.dp))
-                            LazyColumn {
+                            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 items(featuredMovies) { movie ->
                                     MovieCard(
                                         movie = movie,
@@ -151,38 +183,42 @@ fun MainScreen(onSignOut: () -> Unit) {
                                     )
                                 }
                             }
-
                         }
                     } else {
-                        movie?.let {
-                            MovieCard(movie = it, onAddToFavorites = {
-                                coroutineScope.launch {
-                                    val fav = FavoriteMovieEntity(
-                                        imdbID = it.imdbID ?: "",
-                                        title = it.Title ?: "",
-                                        year = it.Year ?: "",
-                                        poster = it.Poster ?: "",
-                                        runtime = it.Runtime ?: "",
-                                        plot = it.Plot ?: ""
-                                    )
-                                    withContext(Dispatchers.IO) {
-                                        dao.insert(fav)
+                        AnimatedVisibility(visible = movie != null) {
+                            movie?.let {
+                                MovieCard(movie = it, onAddToFavorites = {
+                                    coroutineScope.launch {
+                                        val fav = FavoriteMovieEntity(
+                                            imdbID = it.imdbID ?: "",
+                                            title = it.Title ?: "",
+                                            year = it.Year ?: "",
+                                            poster = it.Poster ?: "",
+                                            runtime = it.Runtime ?: "",
+                                            plot = it.Plot ?: ""
+                                        )
+                                        withContext(Dispatchers.IO) {
+                                            dao.insert(fav)
+                                        }
                                     }
-                                }
-                            })
-                        }
-                        error?.let {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(it, color = MaterialTheme.colorScheme.error)
+                                })
+                            }
                         }
                     }
                 }
 
                 1 -> {
                     if (favorites.isEmpty()) {
-                        Text("No favorites yet.")
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(Icons.Default.Favorite, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(64.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("No favorite movies", color = Color.Gray)
+                        }
                     } else {
-                        LazyColumn {
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             items(favorites) { fav ->
                                 MovieCard(
                                     movie = MovieResponse(
@@ -212,11 +248,31 @@ fun MainScreen(onSignOut: () -> Unit) {
                 }
 
                 2 -> {
-                    Button(
-                        onClick = onSignOut,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Text("Sign Out")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Dark theme", style = MaterialTheme.typography.titleMedium)
+                            Switch(
+                                checked = darkTheme,
+                                onCheckedChange = onToggleTheme,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+                        Button(
+                            onClick = onSignOut,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Sign Out")
+                        }
                     }
                 }
             }
@@ -234,38 +290,62 @@ fun MovieCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
-        elevation = CardDefaults.cardElevation()
+        elevation = CardDefaults.cardElevation(8.dp),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("🎬 ${movie.Title} (${movie.Year}) — ${movie.Runtime}", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            AsyncImage(
-                model = movie.Poster,
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(250.dp)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(movie.Plot ?: "", style = MaterialTheme.typography.bodyMedium)
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            onAddToFavorites?.let {
-                Button(onClick = it) {
-                    Text("Add to Favorites")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AsyncImage(
+                    model = movie.Poster,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(160.dp)
+                        .padding(end = 16.dp)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = movie.Title ?: "No title",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = movie.Year ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = movie.Runtime ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
                 }
             }
-
-            onRemove?.let {
-                Button(
-                    onClick = it,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Remove from Favorites")
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(movie.Plot ?: "", style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                horizontalArrangement = Arrangement.End,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                onAddToFavorites?.let {
+                    Button(onClick = it, shape = MaterialTheme.shapes.medium) {
+                        Icon(Icons.Default.Favorite, contentDescription = null)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Add to Favorites")
+                    }
+                }
+                onRemove?.let {
+                    Button(
+                        onClick = it,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.padding(start = 8.dp)
+                    ) {
+                        Icon(Icons.Default.ExitToApp, contentDescription = null)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Remove")
+                    }
                 }
             }
         }
