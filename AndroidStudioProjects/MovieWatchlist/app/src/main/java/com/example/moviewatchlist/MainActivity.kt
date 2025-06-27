@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import com.example.moviewatchlist.ui.theme.MainScreen
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.runtime.SideEffect
 import android.app.Activity
 
