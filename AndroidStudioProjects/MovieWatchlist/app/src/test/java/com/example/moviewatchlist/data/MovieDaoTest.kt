@@ -8,7 +8,12 @@ import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.robolectric.annotation.Config
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
+@Config(manifest = Config.NONE)
 class MovieDaoTest {
 
     private lateinit var db: AppDatabase
